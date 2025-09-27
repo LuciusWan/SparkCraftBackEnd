@@ -1,5 +1,6 @@
 package com.lucius.sparkcraftbackend.ai;
 
+import com.lucius.sparkcraftbackend.ai.node.PromptEnhancerNode;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.GraphStateException;
@@ -56,16 +57,23 @@ public class SimpleWorkflowService {
     }
 
     /**
-     * 执行工作流
+     * 执行工作流（使用默认 appId）
      */
     public Map<String, Object> executeWorkflow(String originalPrompt) throws GraphStateException {
-        log.info("开始执行工作流，原始提示词: {}", originalPrompt);
+        return executeWorkflow(originalPrompt, 1L); // 默认使用 appId = 1
+    }
+
+    /**
+     * 执行工作流（带 appId）
+     */
+    public Map<String, Object> executeWorkflow(String originalPrompt, Long appId) throws GraphStateException {
+        log.info("开始执行工作流，原始提示词: {}, appId: {}", originalPrompt, appId);
         
         // 创建工作流图
         CompiledGraph<MessagesState<String>> workflow = new MessagesStateGraph<String>()
                 // 添加节点
-                .addNode("prompt_enhancer", makeNode("prompt_enhancer", "增强提示词"))
-                .addNode("image_collector", makeNode("image_collector", "获取图片素材"))
+                .addNode("prompt_enhancer", PromptEnhancerNode.create())
+                .addNode("image_collector", com.lucius.sparkcraftbackend.ai.node.ImageSearchNode.create())
                 .addNode("image_maker", makeNode("image_maker", "制作图片"))
                 .addNode("production_process", makeNode("production_process", "生成生产工艺"))
                 .addNode("model_maker", makeNode("model_maker", "制作模型"))
@@ -85,36 +93,65 @@ public class SimpleWorkflowService {
         Map<String, Object> nodeResults = new HashMap<>();
         Map<String, Object> initialInput = new HashMap<>();
         initialInput.put("messages", originalPrompt);
+        initialInput.put("appId", appId);
         
-        for (NodeOutput<MessagesState<String>> step : workflow.stream(initialInput)) {
-            log.info("工作流步骤完成: {} - {}", step.node(), step.state());
-            
-            String nodeName = step.node();
-            if (nodeName != null && step.state() != null) {
-                // 简化处理：根据节点名称设置结果
-                switch (nodeName) {
-                    case "prompt_enhancer":
-                        nodeResults.put(nodeName, "提示词增强完成");
-                        break;
-                    case "image_collector":
-                        nodeResults.put(nodeName, "已收集到相关图片素材");
-                        break;
-                    case "image_maker":
-                        nodeResults.put(nodeName, "已生成文创产品设计图");
-                        break;
-                    case "production_process":
-                        nodeResults.put(nodeName, "已生成生产工艺流程");
-                        break;
-                    case "model_maker":
-                        nodeResults.put(nodeName, "已生成3D模型文件");
-                        break;
-                    default:
-                        nodeResults.put(nodeName, "节点执行完成");
+        // 创建初始的 WorkflowContext 并设置到 ThreadLocal
+        WorkflowContext initialContext = new WorkflowContext();
+        initialContext.setAppId(appId);
+        initialContext.setOriginalPrompt(originalPrompt);
+        WorkflowContext.setCurrentContext(initialContext);
+        
+        try {
+            for (NodeOutput<MessagesState<String>> step : workflow.stream(initialInput)) {
+                log.info("工作流步骤完成: {} - {}", step.node(), step.state());
+                
+                String nodeName = step.node();
+                if (nodeName != null && step.state() != null) {
+                    // 简化处理：根据节点名称设置结果
+                    switch (nodeName) {
+                        case "prompt_enhancer":
+                            nodeResults.put(nodeName, "提示词增强完成");
+                            break;
+                        case "image_collector":
+                            nodeResults.put(nodeName, "已收集到相关图片素材");
+                            break;
+                        case "image_maker":
+                            nodeResults.put(nodeName, "已生成文创产品设计图");
+                            break;
+                        case "production_process":
+                            nodeResults.put(nodeName, "已生成生产工艺流程");
+                            break;
+                        case "model_maker":
+                            nodeResults.put(nodeName, "已生成3D模型文件");
+                            break;
+                        default:
+                            nodeResults.put(nodeName, "节点执行完成");
+                    }
                 }
             }
-        }
         
-        log.info("工作流执行完成，结果: {}", nodeResults);
-        return nodeResults;
+            // 获取工作流上下文中的关键信息
+            WorkflowContext finalContext = WorkflowContext.getCurrentContext();
+            
+            // 添加上下文信息到结果中
+            if (finalContext != null) {
+                nodeResults.put("enhancedPrompt", finalContext.getEnhancedPrompt());
+                nodeResults.put("keyPoint", finalContext.getKeyPoint());
+                nodeResults.put("originalPrompt", finalContext.getOriginalPrompt());
+                nodeResults.put("imageList", finalContext.getImageList());
+                
+                log.info("工作流执行完成 - 关键词: {}", finalContext.getKeyPoint());
+                log.info("工作流执行完成 - 增强提示词长度: {}", 
+                        finalContext.getEnhancedPrompt() != null ? finalContext.getEnhancedPrompt().length() : 0);
+                log.info("工作流执行完成 - 收集到图片数量: {}", 
+                        finalContext.getImageList() != null ? finalContext.getImageList().size() : 0);
+            }
+            
+            log.info("工作流执行完成，结果: {}", nodeResults);
+            return nodeResults;
+        } finally {
+            // 清理 ThreadLocal 上下文
+            WorkflowContext.clearCurrentContext();
+        }
     }
 }

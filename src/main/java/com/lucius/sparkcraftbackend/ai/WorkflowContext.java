@@ -18,7 +18,6 @@ public class WorkflowContext {
      * 应用ID
      */
     private Long appId;
-    
     /**
      * 用户ID
      */
@@ -33,6 +32,11 @@ public class WorkflowContext {
      * 增强后的提示词
      */
     private String enhancedPrompt;
+
+    /**
+     * 关键词（用于搜索参考图片）
+     */
+    private String keyPoint;
 
     /**
      * 3D模型URL
@@ -64,18 +68,41 @@ public class WorkflowContext {
      */
     private Map<String, Object> extraData = new HashMap<>();
     
+    // 静态变量存储当前工作流上下文（线程安全）
+    private static final ThreadLocal<WorkflowContext> CURRENT_CONTEXT = new ThreadLocal<>();
+    
+    /**
+     * 设置当前线程的工作流上下文
+     */
+    public static void setCurrentContext(WorkflowContext context) {
+        CURRENT_CONTEXT.set(context);
+    }
+    
+    /**
+     * 获取当前线程的工作流上下文
+     */
+    public static WorkflowContext getCurrentContext() {
+        WorkflowContext context = CURRENT_CONTEXT.get();
+        if (context == null) {
+            context = new WorkflowContext();
+            CURRENT_CONTEXT.set(context);
+        }
+        return context;
+    }
+    
+    /**
+     * 清理当前线程的工作流上下文
+     */
+    public static void clearCurrentContext() {
+        CURRENT_CONTEXT.remove();
+    }
+    
     /**
      * 从 MessagesState 中获取 WorkflowContext
-     * 由于 MessagesState 没有 getContext 方法，我们使用 messages 的第一个元素来存储上下文信息
      */
     public static WorkflowContext getContext(MessagesState<String> state) {
-        if (state == null) {
-            return new WorkflowContext();
-        }
-        
-        // 尝试从 messages 中获取上下文信息
-        // 这里我们假设第一个消息包含上下文信息的标识
-        return new WorkflowContext(); // 简化处理，返回新的上下文
+        // 使用 ThreadLocal 获取当前上下文
+        return getCurrentContext();
     }
     
     /**

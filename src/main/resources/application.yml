@@ -1,11 +1,13 @@
 spring:
   ai:
     openai:
-      base-url: https://dashscope.aliyuncs.com/compatible-mode
-      api-key: sk-f05ef9cd88fd436ea4be2b2e3edae7f4
+      base-url: https://openai.qiniu.com
+      api-key: sk-f0ded6c46949e01e41738548d4001460d25cd7619f50c0a625683bfbce7d5e74
       chat:
         options:
-          model: qwen3-235b-a22b
+          max-tokens: 600
+          model: doubao-seed-1.6-flash
+
   application:
     name: SparkFrameBackEnd
   profiles:

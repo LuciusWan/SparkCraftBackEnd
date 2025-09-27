@@ -32,9 +32,16 @@ public class WorkflowExecutionServiceImpl implements WorkflowExecutionService {
         try {
             log.info("开始执行工作流，项目ID: {}, 执行ID: {}", imageProjectId, executionId);
             
-            // 使用简化的工作流服务
-            Map<String, Object> nodeResults = simpleWorkflowService.executeWorkflow(originalPrompt);
-            String enhancedPrompt = "增强后的提示词：" + originalPrompt + "（已结合历史对话记忆）";
+            // 使用简化的工作流服务，传递 imageProjectId
+            Map<String, Object> nodeResults = simpleWorkflowService.executeWorkflow(originalPrompt, imageProjectId);
+            
+            // 从工作流结果中获取增强提示词、关键词和图片列表
+            String enhancedPrompt = (String) nodeResults.getOrDefault("enhancedPrompt", 
+                    "增强后的提示词：" + originalPrompt + "（已结合历史对话记忆）");
+            String keyPoint = (String) nodeResults.get("keyPoint");
+            @SuppressWarnings("unchecked")
+            java.util.List<com.lucius.sparkcraftbackend.entity.ImageResource> imageList = 
+                    (java.util.List<com.lucius.sparkcraftbackend.entity.ImageResource>) nodeResults.get("imageList");
             
             LocalDateTime endTime = LocalDateTime.now();
             
@@ -45,10 +52,23 @@ public class WorkflowExecutionServiceImpl implements WorkflowExecutionService {
             result.setStatus("COMPLETED");
             result.setOriginalPrompt(originalPrompt);
             result.setEnhancedPrompt(enhancedPrompt);
+            result.setKeyPoint(keyPoint);
+            result.setImageList(imageList);
             result.setNodeResults(nodeResults);
             result.setStartTime(startTime);
             result.setEndTime(endTime);
             result.setDuration(java.time.Duration.between(startTime, endTime).toMillis());
+            
+            // 输出收集到的图片素材信息
+            if (imageList != null && !imageList.isEmpty()) {
+                log.info("工作流执行完成，收集到 {} 张图片素材:", imageList.size());
+                for (int i = 0; i < imageList.size(); i++) {
+                    com.lucius.sparkcraftbackend.entity.ImageResource image = imageList.get(i);
+                    log.info("  图片 {}: {} - {}", i + 1, image.getDescription(), image.getUrl());
+                }
+            } else {
+                log.info("工作流执行完成，未收集到图片素材");
+            }
             
             log.info("工作流执行完成，执行ID: {}, 耗时: {}ms", executionId, result.getDuration());
             return result;
@@ -93,6 +113,22 @@ public class WorkflowExecutionServiceImpl implements WorkflowExecutionService {
                 // 使用简化的工作流服务执行并模拟流式返回
                 Map<String, Object> allNodeResults = new HashMap<>();
                 String enhancedPrompt = "增强后的提示词：" + originalPrompt + "（已结合历史对话记忆）";
+                String keyPoint = "西安古建筑 文创 古都文化"; // 模拟关键词
+                
+                // 模拟图片素材列表
+                java.util.List<com.lucius.sparkcraftbackend.entity.ImageResource> mockImageList = new java.util.ArrayList<>();
+                mockImageList.add(com.lucius.sparkcraftbackend.entity.ImageResource.builder()
+                        .description("西安古建筑参考图片1")
+                        .url("https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=800")
+                        .build());
+                mockImageList.add(com.lucius.sparkcraftbackend.entity.ImageResource.builder()
+                        .description("文创产品参考图片2")
+                        .url("https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=800")
+                        .build());
+                mockImageList.add(com.lucius.sparkcraftbackend.entity.ImageResource.builder()
+                        .description("传统工艺参考图片3")
+                        .url("https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800")
+                        .build());
                 
                 // 模拟各个节点的执行
                 String[] nodeNames = {"prompt_enhancer", "image_collector", "image_maker", "production_process", "model_maker"};
@@ -121,6 +157,8 @@ public class WorkflowExecutionServiceImpl implements WorkflowExecutionService {
                     stepResult.setStatus("RUNNING");
                     stepResult.setOriginalPrompt(originalPrompt);
                     stepResult.setEnhancedPrompt(enhancedPrompt);
+                    stepResult.setKeyPoint(keyPoint);
+                    stepResult.setImageList(i >= 1 ? mockImageList : null); // 从第二个节点开始显示图片列表
                     stepResult.setNodeResults(new HashMap<>(allNodeResults));
                     stepResult.setStartTime(startTime);
                     
@@ -135,6 +173,8 @@ public class WorkflowExecutionServiceImpl implements WorkflowExecutionService {
                 finalResult.setStatus("COMPLETED");
                 finalResult.setOriginalPrompt(originalPrompt);
                 finalResult.setEnhancedPrompt(enhancedPrompt);
+                finalResult.setKeyPoint(keyPoint);
+                finalResult.setImageList(mockImageList);
                 finalResult.setNodeResults(allNodeResults);
                 finalResult.setStartTime(startTime);
                 finalResult.setEndTime(endTime);

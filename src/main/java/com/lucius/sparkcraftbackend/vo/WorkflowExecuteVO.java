@@ -1,10 +1,12 @@
 package com.lucius.sparkcraftbackend.vo;
 
+import com.lucius.sparkcraftbackend.entity.ImageResource;
 import lombok.Data;
 
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -37,6 +39,16 @@ public class WorkflowExecuteVO implements Serializable {
      * 增强后的提示词
      */
     private String enhancedPrompt;
+
+    /**
+     * 关键词（用于搜索参考图片）
+     */
+    private String keyPoint;
+
+    /**
+     * 收集到的图片素材列表
+     */
+    private List<ImageResource> imageList;
 
     /**
      * 各个节点的执行结果

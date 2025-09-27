@@ -2,7 +2,6 @@ package com.lucius.sparkcraftbackend.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONUtil;
 import com.lucius.sparkcraftbackend.annotation.AuthCheck;
 import com.lucius.sparkcraftbackend.common.BaseResponse;
 import com.lucius.sparkcraftbackend.common.DeleteRequest;
@@ -23,7 +22,6 @@ import com.lucius.sparkcraftbackend.vo.ImageProjectVO;
 import com.lucius.sparkcraftbackend.vo.WorkflowExecuteVO;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
-import com.tencentcloudapi.common.exception.TencentCloudSDKException;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.MediaType;
@@ -34,16 +32,9 @@ import com.lucius.sparkcraftbackend.service.ImageProjectService;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import com.tencentcloudapi.common.AbstractModel;
-import com.tencentcloudapi.wsa.v20250508.WsaClient;
-import com.tencentcloudapi.wsa.v20250508.models.*;
-import com.tencentcloudapi.common.Credential;
-import com.tencentcloudapi.common.profile.ClientProfile;
-import com.tencentcloudapi.common.profile.HttpProfile;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 /**
  *  控制层。

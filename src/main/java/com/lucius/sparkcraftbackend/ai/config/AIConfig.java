@@ -30,4 +30,14 @@ public class AIConfig {
                         new SimpleLoggerAdvisor())
                 .build();
     }
+
+    @Bean
+    public ChatClient keyPointExtractionChatClient(OpenAiChatModel model, ChatMemory chatMemory) {
+        return ChatClient.builder(model)
+                .defaultSystem(AIConstant.KEY_POINT_EXTRACTION)
+                .defaultAdvisors(
+                        new MessageChatMemoryAdvisor(chatMemory),
+                        new SimpleLoggerAdvisor())
+                .build();
+    }
 }
