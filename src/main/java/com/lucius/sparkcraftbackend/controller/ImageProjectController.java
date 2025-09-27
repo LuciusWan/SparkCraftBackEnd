@@ -12,12 +12,15 @@ import com.lucius.sparkcraftbackend.constant.UserConstant;
 import com.lucius.sparkcraftbackend.dto.ImageProjectAddRequest;
 import com.lucius.sparkcraftbackend.dto.ImageProjectQueryRequest;
 import com.lucius.sparkcraftbackend.dto.ImageProjectUpdateRequest;
+import com.lucius.sparkcraftbackend.dto.WorkflowExecuteRequest;
 import com.lucius.sparkcraftbackend.entity.User;
 import com.lucius.sparkcraftbackend.exception.BusinessException;
 import com.lucius.sparkcraftbackend.exception.ErrorCode;
 import com.lucius.sparkcraftbackend.exception.ThrowUtils;
 import com.lucius.sparkcraftbackend.service.UserService;
+import com.lucius.sparkcraftbackend.service.WorkflowExecutionService;
 import com.lucius.sparkcraftbackend.vo.ImageProjectVO;
+import com.lucius.sparkcraftbackend.vo.WorkflowExecuteVO;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.tencentcloudapi.common.exception.TencentCloudSDKException;
@@ -28,6 +31,7 @@ import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import com.lucius.sparkcraftbackend.entity.ImageProject;
 import com.lucius.sparkcraftbackend.service.ImageProjectService;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import com.tencentcloudapi.common.AbstractModel;
@@ -55,6 +59,9 @@ public class ImageProjectController {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private WorkflowExecutionService workflowExecutionService;
 
 
     /**
@@ -228,50 +235,136 @@ public class ImageProjectController {
         return ResultUtils.success(result);
     }
 
-    @GetMapping(value = "/chat/get/idea", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<String>> chatToGetIdea(@RequestParam Long imageProjectId,
-                                                       @RequestParam String message,
-                                                       HttpServletRequest request) throws TencentCloudSDKException {
+
+
+    /**
+     * 执行工作流（同步）
+     *
+     * @param workflowExecuteRequest 工作流执行请求
+     * @param request               HTTP请求
+     * @return 工作流执行结果
+     */
+    @PostMapping("/workflow/execute")
+    public BaseResponse<WorkflowExecuteVO> executeWorkflow(@RequestBody WorkflowExecuteRequest workflowExecuteRequest, 
+                                                          HttpServletRequest request) {
         // 参数校验
-        ThrowUtils.throwIf(imageProjectId == null || imageProjectId <= 0, ErrorCode.PARAMS_ERROR, "应用ID无效");
-        ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
+        ThrowUtils.throwIf(workflowExecuteRequest == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(workflowExecuteRequest.getImageProjectId() == null || workflowExecuteRequest.getImageProjectId() <= 0, 
+                          ErrorCode.PARAMS_ERROR, "项目ID无效");
+        ThrowUtils.throwIf(StrUtil.isBlank(workflowExecuteRequest.getOriginalPrompt()), 
+                          ErrorCode.PARAMS_ERROR, "原始提示词不能为空");
+        
         // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
-        /*Credential cred = new Credential(System.getenv("TENCENTCLOUD_SECRET_ID"), System.getenv("TENCENTCLOUD_SECRET_KEY"));
-        HttpProfile httpProfile = new HttpProfile();
-        httpProfile.setEndpoint("wsa.tencentcloudapi.com");
-        // 实例化一个client选项，可选的，没有特殊需求可以跳过
-        ClientProfile clientProfile = new ClientProfile();
-        clientProfile.setHttpProfile(httpProfile);
-        // 实例化要请求产品的client对象,clientProfile是可选的
-        WsaClient client = new WsaClient(cred, "", clientProfile);
-        // 实例化一个请求对象,每个接口都会对应一个request对象
-        SearchProRequest req = new SearchProRequest();
-        req.setQuery("昔涟是谁");
-        req.setCnt(3L);
-        // 返回的resp是一个SearchProResponse的实例，与请求对象对应
-        SearchProResponse resp = client.SearchPro(req);
-        // 输出json格式的字符串回包
-        System.out.println(AbstractModel.toJsonString(resp));*/
-        // 调用服务获取idea（流式）
-        Flux<String> stringFlux = imageProjectService.chatToGetIdea(imageProjectId,message, loginUser);
+        
+        // 验证项目是否存在且用户有权限
+        ImageProject imageProject = imageProjectService.getById(workflowExecuteRequest.getImageProjectId());
+        ThrowUtils.throwIf(imageProject == null, ErrorCode.NOT_FOUND_ERROR, "项目不存在");
+        ThrowUtils.throwIf(!imageProject.getUserId().equals(loginUser.getId()), 
+                          ErrorCode.NO_AUTH_ERROR, "无权限访问该项目");
+        
+        // 执行工作流
+        WorkflowExecuteVO result = workflowExecutionService.executeWorkflow(
+                workflowExecuteRequest.getImageProjectId(),
+                workflowExecuteRequest.getOriginalPrompt(),
+                loginUser
+        );
+        
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 执行工作流（流式）
+     *
+     * @param workflowExecuteRequest 工作流执行请求
+     * @param request               HTTP请求
+     * @return 工作流执行状态流
+     */
+    @PostMapping(value = "/workflow/execute/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<WorkflowExecuteVO>> executeWorkflowStream(@RequestBody WorkflowExecuteRequest workflowExecuteRequest,
+                                                                          HttpServletRequest request) {
+        // 参数校验
+        ThrowUtils.throwIf(workflowExecuteRequest == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(workflowExecuteRequest.getImageProjectId() == null || workflowExecuteRequest.getImageProjectId() <= 0,
+                          ErrorCode.PARAMS_ERROR, "项目ID无效");
+        ThrowUtils.throwIf(StrUtil.isBlank(workflowExecuteRequest.getOriginalPrompt()),
+                          ErrorCode.PARAMS_ERROR, "原始提示词不能为空");
+
+        // 获取当前登录用户
+        User loginUser = userService.getLoginUser(request);
+
+        // 验证项目是否存在且用户有权限
+        ImageProject imageProject = imageProjectService.getById(workflowExecuteRequest.getImageProjectId());
+        ThrowUtils.throwIf(imageProject == null, ErrorCode.NOT_FOUND_ERROR, "项目不存在");
+        ThrowUtils.throwIf(!imageProject.getUserId().equals(loginUser.getId()),
+                          ErrorCode.NO_AUTH_ERROR, "无权限访问该项目");
+
+        // 执行流式工作流
+        Flux<WorkflowExecuteVO> workflowStream = workflowExecutionService.executeWorkflowStream(
+                workflowExecuteRequest.getImageProjectId(),
+                workflowExecuteRequest.getOriginalPrompt(),
+                loginUser
+        );
+
         // 转换为 ServerSentEvent 格式
-        return stringFlux
-                .map(chunk -> {
-                    // 将内容包装成JSON对象
-                    Map<String, String> wrapper = Map.of("d", chunk);
-                    String jsonData = JSONUtil.toJsonStr(wrapper);
-                    return ServerSentEvent.<String>builder()
-                            .data(jsonData)
-                            .build();
-                })
+        return workflowStream
+                .map(result -> ServerSentEvent.<WorkflowExecuteVO>builder()
+                        .data(result)
+                        .build())
                 .concatWith(Mono.just(
                         // 发送结束事件
-                        ServerSentEvent.<String>builder()
+                        ServerSentEvent.<WorkflowExecuteVO>builder()
                                 .event("done")
-                                .data("")
+                                .data(null)
                                 .build()
                 ));
+    }
+
+    /**
+     * 获取工作流执行状态（通过执行ID）
+     *
+     * @param executionId 执行ID
+     * @param request     HTTP请求
+     * @return 工作流执行状态
+     */
+    @GetMapping("/workflow/status/{executionId}")
+    public BaseResponse<WorkflowExecuteVO> getWorkflowStatus(@PathVariable String executionId, 
+                                                            HttpServletRequest request) {
+        // 获取当前登录用户
+        User loginUser = userService.getLoginUser(request);
+        
+        // TODO: 这里可以实现从缓存或数据库中查询执行状态的逻辑
+        // 目前返回一个示例状态
+        WorkflowExecuteVO result = new WorkflowExecuteVO();
+        result.setExecutionId(executionId);
+        result.setStatus("COMPLETED");
+        
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 测试工作流执行（简化版，用于调试）
+     *
+     * @param imageProjectId 项目ID
+     * @param prompt         提示词
+     * @param request        HTTP请求
+     * @return 工作流执行结果
+     */
+    @GetMapping("/workflow/test")
+    public BaseResponse<WorkflowExecuteVO> testWorkflow(@RequestParam Long imageProjectId,
+                                                       @RequestParam String prompt,
+                                                       HttpServletRequest request) {
+        // 获取当前登录用户
+        User loginUser = userService.getLoginUser(request);
+        
+        // 验证项目是否存在
+        ImageProject imageProject = imageProjectService.getById(imageProjectId);
+        ThrowUtils.throwIf(imageProject == null, ErrorCode.NOT_FOUND_ERROR, "项目不存在");
+        
+        // 执行工作流
+        WorkflowExecuteVO result = workflowExecutionService.executeWorkflow(imageProjectId, prompt, loginUser);
+        
+        return ResultUtils.success(result);
     }
 
 
@@ -358,4 +451,19 @@ public class ImageProjectController {
         return imageProjectService.page(page);
     }
 
+
+    @GetMapping(value = "/chat/get/idea", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter chatToGetIdea(@RequestParam Long imageProjectId,
+                                    @RequestParam String message,
+                                    HttpServletRequest request){
+        SseEmitter emitter=new SseEmitter(60000000L);
+
+        // 参数校验
+        ThrowUtils.throwIf(imageProjectId == null || imageProjectId <= 0, ErrorCode.PARAMS_ERROR, "应用ID无效");
+        ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
+        // 获取当前登录用户
+        User loginUser = userService.getLoginUser(request);
+        imageProjectService.chatToGetTheIdea(imageProjectId,message, loginUser,emitter);
+        return emitter;
+    }
 }

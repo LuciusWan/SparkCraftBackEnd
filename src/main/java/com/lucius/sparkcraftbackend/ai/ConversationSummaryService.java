@@ -1,11 +1,8 @@
 package com.lucius.sparkcraftbackend.ai;
 
-import dev.langchain4j.service.SystemMessage;
-import dev.langchain4j.service.UserMessage;
-
 /**
  * 对话记忆总结服务
- * 使用 LangChain4j AIService 来总结对话记忆
+ * 简化版本，不依赖 LangChain4j
  */
 public interface ConversationSummaryService {
 
@@ -15,6 +12,5 @@ public interface ConversationSummaryService {
      * @param chatHistory 聊天记录内容
      * @return 总结后的对话记忆
      */
-    @SystemMessage(fromResource = "prompt/Summary.txt")
-    String summarizeConversation(@UserMessage String chatHistory);
+    String summarizeConversation(String chatHistory);
 }

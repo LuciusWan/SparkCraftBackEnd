@@ -3,7 +3,8 @@ package com.lucius.sparkcraftbackend.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
-import com.lucius.sparkcraftbackend.ai.AiCodeGeneratorFacade;
+import cn.hutool.json.JSONException;
+import cn.hutool.json.JSONObject;
 import com.lucius.sparkcraftbackend.ai.handler.StreamHandlerExecutor;
 import com.lucius.sparkcraftbackend.dto.ImageProjectQueryRequest;
 import com.lucius.sparkcraftbackend.entity.User;
@@ -20,11 +21,19 @@ import com.lucius.sparkcraftbackend.entity.ImageProject;
 import com.lucius.sparkcraftbackend.mapper.ImageProjectMapper;
 import com.lucius.sparkcraftbackend.service.ImageProjectService;
 import jakarta.annotation.Resource;
-import org.intellij.lang.annotations.RegExp;
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
+import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
@@ -33,15 +42,18 @@ import java.util.stream.Collectors;
  * @author <a href="https://github.com/LuciusWan">LuciusWan</a>
  */
 @Service
+@Slf4j
 public class ImageProjectServiceImpl extends ServiceImpl<ImageProjectMapper, ImageProject>  implements ImageProjectService{
     @Resource
     private UserService userService;
     @Resource
     private ChatHistoryService chatHistoryService;
     @Resource
-    private AiCodeGeneratorFacade aiCodeGeneratorFacade;
-    @Resource
     private StreamHandlerExecutor streamHandlerExecutor;
+    @Autowired
+    private ChatClient getIdeaChatClient;
+
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     @Override
     public ImageProjectVO getImageVO(ImageProject imageProject) {
         if (imageProject == null) {
@@ -98,28 +110,39 @@ public class ImageProjectServiceImpl extends ServiceImpl<ImageProjectMapper, Ima
         }).collect(Collectors.toList());
     }
 
+
     @Override
-    public Flux<String> chatToGetIdea(Long imageProjectId,String message, User loginUser) {
-        if (imageProjectId == null||imageProjectId<0){
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "imageProjectId为空");
-        }
-        if (StrUtil.isBlank(message)){
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "提示词不能为空");
-        }
-        if (loginUser == null){
-            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
-        }
-        ImageProject imageProject=this.mapper.selectOneById(imageProjectId);
-        if (!Objects.equals(imageProject.getUserId(), loginUser.getId())){
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR,"非本人的app");
-        }
+    public void chatToGetTheIdea(Long imageProjectId, String message, User loginUser, SseEmitter emitter) {
+        StringBuilder stringBuilder=new StringBuilder();
+        executorService.submit(() -> {
+            getIdeaChatClient.prompt()
+                        .user(message)
+                        .advisors(a -> a.param(AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY, imageProjectId))
+                        .stream()
+                        .content()
+                        .subscribe(
+                                chunk -> {
+                                    try {
+                                        stringBuilder.append(chunk);
+                                        JSONObject jsonObject = new JSONObject();
+                                        jsonObject.put("d", chunk);
+                                        emitter.send(jsonObject.toString());
+                                    } catch (JSONException | IOException e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                },
+                                error -> {throw new BusinessException(ErrorCode.NO_AUTH_ERROR,"回复的时候出错");},
+                                () -> {
+                                    try {
+                                        emitter.send("end");
+                                    } catch (IOException e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                    log.info("回复完成{}", stringBuilder);
+                                    emitter.complete();
+                                }
+                        );
 
-        // 5. 通过校验后，添加用户消息到对话历史
-        chatHistoryService.addChatMessage(imageProjectId, message, ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
-        // 6. 调用 AI 生成流式回复
-        Flux<String> codeStream = aiCodeGeneratorFacade.generateStreamAnswer(message, imageProjectId);
-        // 7. 收集 AI 响应内容并在完成后记录到对话历史
-        return streamHandlerExecutor.doExecute(codeStream, chatHistoryService, imageProjectId, loginUser);
-
+        });
     }
 }

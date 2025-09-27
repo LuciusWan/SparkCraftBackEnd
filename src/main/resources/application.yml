@@ -1,4 +1,11 @@
 spring:
+  ai:
+    openai:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode
+      api-key: sk-f05ef9cd88fd436ea4be2b2e3edae7f4
+      chat:
+        options:
+          model: qwen3-235b-a22b
   application:
     name: SparkFrameBackEnd
   profiles:
@@ -27,3 +34,4 @@ knife4j:
   enable: true
   setting:
     language: zh_cn
+

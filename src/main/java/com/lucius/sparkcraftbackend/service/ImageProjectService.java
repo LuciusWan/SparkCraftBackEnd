@@ -6,6 +6,7 @@ import com.lucius.sparkcraftbackend.vo.ImageProjectVO;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
 import com.lucius.sparkcraftbackend.entity.ImageProject;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -23,5 +24,5 @@ public interface ImageProjectService extends IService<ImageProject> {
 
     List<ImageProjectVO> getImageVOList(List<ImageProject> records);
 
-    Flux<String> chatToGetIdea(Long imageProjectId ,String  message, User loginUser);
+    void chatToGetTheIdea(Long imageProjectId, String message, User loginUser, SseEmitter emitter);
 }

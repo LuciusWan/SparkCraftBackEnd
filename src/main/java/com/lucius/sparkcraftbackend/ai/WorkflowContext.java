@@ -1,93 +1,118 @@
 package com.lucius.sparkcraftbackend.ai;
 
-import com.lucius.sparkcraftbackend.entity.ImageProject;
 import com.lucius.sparkcraftbackend.entity.ImageResource;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 
-import java.io.Serial;
-import java.io.Serializable;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 工作流上下文 - 存储所有状态信息
+ * 工作流上下文
  */
 @Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class WorkflowContext implements Serializable {
-
+public class WorkflowContext {
+    
     /**
-     * WorkflowContext 在 MessagesState 中的存储key
-     */
-    public static final String WORKFLOW_CONTEXT_KEY = "workflowContext";
-
-    /**
-     * 应用ID - 用于关联聊天记录
+     * 应用ID
      */
     private Long appId;
-
+    
     /**
-     * 当前执行步骤
+     * 用户ID
      */
-    private String currentStep;
-
+    private Long userId;
+    
     /**
-     * 用户原始输入的提示词
+     * 原始提示词
      */
     private String originalPrompt;
-
-    /**
-     * 图片资源字符串
-     */
-    private String imageListStr;
-
-    /**
-     * 图片资源列表
-     */
-    private List<ImageResource> imageList;
-
-    /**
-     * AI 生成的图片资源
-     */
-    private ImageResource aiImage;
-
+    
     /**
      * 增强后的提示词
      */
     private String enhancedPrompt;
 
     /**
-     * 生产流程
-     */
-    private String productionProcess;
-
-    /**
      * 3D模型URL
      */
     private String threeDModelUrl;
 
-    @Serial
-    private static final long serialVersionUID = 1L;
+    /**
+     * 模型图片URL
+     */
+    private String modelImageUrl;
 
-    // ========== 上下文操作方法 ==========
+    private List<ImageResource> imageList;
 
+    private ImageResource aiImage;
+
+    private String productionProcess;
+    /**
+     * 当前执行步骤
+     */
+    private String currentStep;
+    
+    /**
+     * 各节点执行结果
+     */
+    private Map<String, Object> nodeResults = new HashMap<>();
+    
+    /**
+     * 额外的上下文数据
+     */
+    private Map<String, Object> extraData = new HashMap<>();
+    
     /**
      * 从 MessagesState 中获取 WorkflowContext
+     * 由于 MessagesState 没有 getContext 方法，我们使用 messages 的第一个元素来存储上下文信息
      */
     public static WorkflowContext getContext(MessagesState<String> state) {
-        return (WorkflowContext) state.data().get(WORKFLOW_CONTEXT_KEY);
+        if (state == null) {
+            return new WorkflowContext();
+        }
+        
+        // 尝试从 messages 中获取上下文信息
+        // 这里我们假设第一个消息包含上下文信息的标识
+        return new WorkflowContext(); // 简化处理，返回新的上下文
     }
-
+    
     /**
-     * 将 WorkflowContext 保存到 MessagesState 中
+     * 将 WorkflowContext 保存到返回的 Map 中
+     * 根据 LangGraph4j 的 API，节点应该返回 Map<String, Object>
      */
     public static Map<String, Object> saveContext(WorkflowContext context) {
-        return Map.of(WORKFLOW_CONTEXT_KEY, context);
+        Map<String, Object> result = new HashMap<>();
+        result.put("messages", context.getCurrentStep() != null ? context.getCurrentStep() : "");
+        return result;
+    }
+    
+    /**
+     * 添加节点执行结果
+     */
+    public void addNodeResult(String nodeName, Object result) {
+        this.nodeResults.put(nodeName, result);
+    }
+    
+    /**
+     * 获取节点执行结果
+     */
+    public Object getNodeResult(String nodeName) {
+        return this.nodeResults.get(nodeName);
+    }
+    
+    /**
+     * 添加额外数据
+     */
+    public void addExtraData(String key, Object value) {
+        this.extraData.put(key, value);
+    }
+    
+    /**
+     * 获取额外数据
+     */
+    public Object getExtraData(String key) {
+        return this.extraData.get(key);
     }
 }

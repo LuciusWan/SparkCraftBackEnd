@@ -64,4 +64,22 @@ create table if not exists image_project(
     createTime  datetime default CURRENT_TIMESTAMP not null comment '创建时间',
     updateTime  datetime default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
     isDelete    tinyint  default 0                 not null comment '是否删除'
+);
+
+create table chat_memory
+(
+    id              bigint auto_increment
+        primary key,
+    conversation_id varchar(255)                        not null,
+    message_type    varchar(50)                         not null,
+    content         text                                not null,
+    metadata        json                                null,
+    created_at      timestamp default CURRENT_TIMESTAMP null
 )
+    collate = utf8mb4_unicode_ci;
+
+create index idx_conversation_id
+    on chat_memory (conversation_id);
+
+create index idx_created_at
+    on chat_memory (created_at);
