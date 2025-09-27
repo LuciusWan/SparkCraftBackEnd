@@ -20,17 +20,22 @@ import com.lucius.sparkcraftbackend.service.UserService;
 import com.lucius.sparkcraftbackend.vo.ImageProjectVO;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
-import dev.langchain4j.data.image.Image;
+import com.tencentcloudapi.common.exception.TencentCloudSDKException;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.beans.factory.annotation.Autowired;
 import com.lucius.sparkcraftbackend.entity.ImageProject;
 import com.lucius.sparkcraftbackend.service.ImageProjectService;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import com.tencentcloudapi.common.AbstractModel;
+import com.tencentcloudapi.wsa.v20250508.WsaClient;
+import com.tencentcloudapi.wsa.v20250508.models.*;
+import com.tencentcloudapi.common.Credential;
+import com.tencentcloudapi.common.profile.ClientProfile;
+import com.tencentcloudapi.common.profile.HttpProfile;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -226,12 +231,28 @@ public class ImageProjectController {
     @GetMapping(value = "/chat/get/idea", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> chatToGetIdea(@RequestParam Long imageProjectId,
                                                        @RequestParam String message,
-                                                       HttpServletRequest request) {
+                                                       HttpServletRequest request) throws TencentCloudSDKException {
         // 参数校验
         ThrowUtils.throwIf(imageProjectId == null || imageProjectId <= 0, ErrorCode.PARAMS_ERROR, "应用ID无效");
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
         // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
+        /*Credential cred = new Credential(System.getenv("TENCENTCLOUD_SECRET_ID"), System.getenv("TENCENTCLOUD_SECRET_KEY"));
+        HttpProfile httpProfile = new HttpProfile();
+        httpProfile.setEndpoint("wsa.tencentcloudapi.com");
+        // 实例化一个client选项，可选的，没有特殊需求可以跳过
+        ClientProfile clientProfile = new ClientProfile();
+        clientProfile.setHttpProfile(httpProfile);
+        // 实例化要请求产品的client对象,clientProfile是可选的
+        WsaClient client = new WsaClient(cred, "", clientProfile);
+        // 实例化一个请求对象,每个接口都会对应一个request对象
+        SearchProRequest req = new SearchProRequest();
+        req.setQuery("昔涟是谁");
+        req.setCnt(3L);
+        // 返回的resp是一个SearchProResponse的实例，与请求对象对应
+        SearchProResponse resp = client.SearchPro(req);
+        // 输出json格式的字符串回包
+        System.out.println(AbstractModel.toJsonString(resp));*/
         // 调用服务获取idea（流式）
         Flux<String> stringFlux = imageProjectService.chatToGetIdea(imageProjectId,message, loginUser);
         // 转换为 ServerSentEvent 格式
