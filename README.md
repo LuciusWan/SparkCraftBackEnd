@@ -1,7 +1,7 @@
 # SparkCraft BackEnd
 
 <div align="center">
-  <h3>🚀 AI驱动的文创产品设计与制作平台</h3>
+  <h2>🚀 AI驱动的文创产品设计与制作平台</h2>
   <p>基于 Spring Boot 3.5.5 构建的企业级后端服务</p>
   
   ![Java](https://img.shields.io/badge/Java-17-orange)
@@ -727,5 +727,5 @@ docker-compose up -d
 
 <div align="center">
   <p>如果这个项目对您有帮助，请给我们一个 ⭐ Star！</p>
-  <p>© 2024 SparkCraftBackEnd. All rights reserved.</p>
+  <p>© 2025 SparkCraftBackEnd. All rights reserved.</p>
 </div>
