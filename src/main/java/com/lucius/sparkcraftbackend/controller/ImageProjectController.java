@@ -18,12 +18,14 @@ import com.lucius.sparkcraftbackend.exception.ErrorCode;
 import com.lucius.sparkcraftbackend.exception.ThrowUtils;
 import com.lucius.sparkcraftbackend.service.UserService;
 import com.lucius.sparkcraftbackend.service.WorkflowExecutionService;
+import com.lucius.sparkcraftbackend.service.WorkflowProgressService;
 import com.lucius.sparkcraftbackend.vo.ImageProjectVO;
 import com.lucius.sparkcraftbackend.vo.WorkflowExecuteVO;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
@@ -43,6 +45,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/imageProject")
+@Slf4j
 public class ImageProjectController {
 
     @Resource
@@ -53,6 +56,9 @@ public class ImageProjectController {
 
     @Resource
     private WorkflowExecutionService workflowExecutionService;
+
+    @Resource
+    private WorkflowProgressService workflowProgressService;
 
 
     /**
@@ -229,7 +235,7 @@ public class ImageProjectController {
 
 
     /**
-     * 执行工作流（同步）
+     * 执行工作流（同步）- 保留原有接口
      *
      * @param workflowExecuteRequest 工作流执行请求
      * @param request               HTTP请求
@@ -238,6 +244,86 @@ public class ImageProjectController {
     @PostMapping("/workflow/execute")
     public BaseResponse<WorkflowExecuteVO> executeWorkflow(@RequestBody WorkflowExecuteRequest workflowExecuteRequest, 
                                                           HttpServletRequest request) {
+        // 参数校验
+        ThrowUtils.throwIf(workflowExecuteRequest == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(workflowExecuteRequest.getImageProjectId() == null || workflowExecuteRequest.getImageProjectId() <= 0, 
+                          ErrorCode.PARAMS_ERROR, "项目ID无效");
+        ThrowUtils.throwIf(StrUtil.isBlank(workflowExecuteRequest.getOriginalPrompt()), 
+                          ErrorCode.PARAMS_ERROR, "原始提示词不能为空");
+
+        // 获取当前登录用户
+        User loginUser = userService.getLoginUser(request);
+        log.info("任务ID为{}", workflowExecuteRequest.getImageProjectId());
+        // 验证项目是否存在且用户有权限
+        ImageProject imageProject = imageProjectService.getById(workflowExecuteRequest.getImageProjectId());
+        ThrowUtils.throwIf(imageProject == null, ErrorCode.NOT_FOUND_ERROR, "项目不存在");
+        ThrowUtils.throwIf(!imageProject.getUserId().equals(loginUser.getId()), 
+                          ErrorCode.NO_AUTH_ERROR, "无权限访问该项目");
+        
+        // 执行工作流
+        WorkflowExecuteVO result = workflowExecutionService.executeWorkflow(
+                workflowExecuteRequest.getImageProjectId(),
+                workflowExecuteRequest.getOriginalPrompt(),
+                loginUser
+        );
+        
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 建立工作流执行进度SSE连接（基于项目ID）
+     *
+     * @param imageProjectId 项目ID
+     * @param request HTTP请求
+     * @return SSE连接
+     */
+    @GetMapping("/workflow/sse/{imageProjectId}")
+    public SseEmitter establishWorkflowSSE(@PathVariable String imageProjectId, HttpServletRequest request) {
+        // 参数校验
+        ThrowUtils.throwIf(StrUtil.isBlank(imageProjectId), ErrorCode.PARAMS_ERROR, "项目ID不能为空");
+        
+        // 获取当前登录用户
+        User loginUser = userService.getLoginUser(request);
+        
+        // 验证项目是否存在且用户有权限
+        try {
+            Long projectId = Long.valueOf(imageProjectId);
+            ImageProject imageProject = imageProjectService.getById(projectId);
+            ThrowUtils.throwIf(imageProject == null, ErrorCode.NOT_FOUND_ERROR, "项目不存在");
+            ThrowUtils.throwIf(!imageProject.getUserId().equals(loginUser.getId()), 
+                              ErrorCode.NO_AUTH_ERROR, "无权限访问该项目");
+        } catch (NumberFormatException e) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "项目ID格式无效");
+        }
+        
+        // 创建SSE连接
+        return workflowProgressService.createConnection(imageProjectId, loginUser.getId());
+    }
+
+    /**
+     * 建立工作流执行进度SSE连接（基于任务ID）- 兼容旧接口
+     *
+     * @param imageProjectId 任务ID
+     * @param request HTTP请求
+     * @return SSE连接
+     */
+    @GetMapping("/workflow/progress/{imageProjectId}")
+    @Deprecated
+    public SseEmitter getWorkflowProgress(@PathVariable String imageProjectId, HttpServletRequest request) {
+        // 直接调用新的SSE接口
+        return establishWorkflowSSE(imageProjectId, request);
+    }
+
+    /**
+     * 执行工作流（异步，支持实时进度推送）
+     *
+     * @param workflowExecuteRequest 工作流执行请求
+     * @param request               HTTP请求
+     * @return 工作流任务信息（包含jobId）
+     */
+    @PostMapping("/workflow/execute/async")
+    public BaseResponse<WorkflowExecuteVO> executeWorkflowAsync(@RequestBody WorkflowExecuteRequest workflowExecuteRequest, 
+                                                               HttpServletRequest request) {
         // 参数校验
         ThrowUtils.throwIf(workflowExecuteRequest == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(workflowExecuteRequest.getImageProjectId() == null || workflowExecuteRequest.getImageProjectId() <= 0, 
@@ -254,8 +340,44 @@ public class ImageProjectController {
         ThrowUtils.throwIf(!imageProject.getUserId().equals(loginUser.getId()), 
                           ErrorCode.NO_AUTH_ERROR, "无权限访问该项目");
         
-        // 执行工作流
-        WorkflowExecuteVO result = workflowExecutionService.executeWorkflow(
+        // 异步执行工作流
+        WorkflowExecuteVO result = workflowExecutionService.executeWorkflowAsync(
+                workflowExecuteRequest.getImageProjectId(),
+                workflowExecuteRequest.getOriginalPrompt(),
+                loginUser
+        );
+        
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 执行工作流（SSE流式执行，即即执行并推送进度）
+     *
+     * @param workflowExecuteRequest 工作流执行请求
+     * @param request               HTTP请求
+     * @return 工作流任务信息（包含jobId）
+     */
+    @PostMapping("/workflow/execute/sse")
+    public BaseResponse<WorkflowExecuteVO> executeWorkflowWithSSE(@RequestBody WorkflowExecuteRequest workflowExecuteRequest, 
+                                                                 HttpServletRequest request) {
+        // 参数校验
+        ThrowUtils.throwIf(workflowExecuteRequest == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(workflowExecuteRequest.getImageProjectId() == null || workflowExecuteRequest.getImageProjectId() <= 0, 
+                          ErrorCode.PARAMS_ERROR, "项目ID无效");
+        ThrowUtils.throwIf(StrUtil.isBlank(workflowExecuteRequest.getOriginalPrompt()), 
+                          ErrorCode.PARAMS_ERROR, "原始提示词不能为空");
+        
+        // 获取当前登录用户
+        User loginUser = userService.getLoginUser(request);
+        
+        // 验证项目是否存在且用户有权限
+        ImageProject imageProject = imageProjectService.getById(workflowExecuteRequest.getImageProjectId());
+        ThrowUtils.throwIf(imageProject == null, ErrorCode.NOT_FOUND_ERROR, "项目不存在");
+        ThrowUtils.throwIf(!imageProject.getUserId().equals(loginUser.getId()), 
+                          ErrorCode.NO_AUTH_ERROR, "无权限访问该项目");
+        
+        // 异步执行工作流（带SSE推送）
+        WorkflowExecuteVO result = workflowExecutionService.executeWorkflowAsyncWithSSE(
                 workflowExecuteRequest.getImageProjectId(),
                 workflowExecuteRequest.getOriginalPrompt(),
                 loginUser

@@ -20,6 +20,26 @@ public interface WorkflowExecutionService {
     WorkflowExecuteVO executeWorkflow(Long imageProjectId, String originalPrompt, User loginUser);
 
     /**
+     * 异步执行工作流（支持SSE进度推送）
+     *
+     * @param imageProjectId 项目ID
+     * @param originalPrompt 原始提示词
+     * @param loginUser      登录用户
+     * @return 任务信息（包含jobId）
+     */
+    WorkflowExecuteVO executeWorkflowAsync(Long imageProjectId, String originalPrompt, User loginUser);
+
+    /**
+     * 异步执行工作流（支持SSE实时进度推送）
+     *
+     * @param imageProjectId 项目ID
+     * @param originalPrompt 原始提示词
+     * @param loginUser      登录用户
+     * @return 任务信息（包含jobId）
+     */
+    WorkflowExecuteVO executeWorkflowAsyncWithSSE(Long imageProjectId, String originalPrompt, User loginUser);
+
+    /**
      * 流式执行工作流（实时返回各节点执行状态）
      *
      * @param imageProjectId 项目ID

@@ -5,8 +5,10 @@ spring:
       api-key: sk-f0ded6c46949e01e41738548d4001460d25cd7619f50c0a625683bfbce7d5e74
       chat:
         options:
-          max-tokens: 600
+          max-tokens: 2000
           model: doubao-seed-1.6-flash
+
+
 
   application:
     name: SparkFrameBackEnd
@@ -36,4 +38,28 @@ knife4j:
   enable: true
   setting:
     language: zh_cn
+# 豆包 AI 图片生成配置
+doubao:
+  ai:
+    api-url: ${spring.ai.openai.base-url}
+    api-key: ${spring.ai.openai.api-key}
+    model: doubao-seedream-4-0-250828
+    timeout: 60000
+
+# 通义千问多模态 API 配置
+qwen:
+  ai:
+    api-url: ${spring.ai.openai.base-url}
+    api-key: ${spring.ai.openai.api-key}
+    model: ${spring.ai.openai.model}
+    timeout: ${spring.ai.openai.options.timeout}
+
+# 腾讯云AI 3D配置
+tencent:
+  cloud:
+    secret-id: ${tencent.cloud.secret-id}
+    secret-key: ${tencent.cloud.secret-key}
+    region: ap-guangzhou
+    ai3d:
+      endpoint: ai3d.tencentcloudapi.com
 

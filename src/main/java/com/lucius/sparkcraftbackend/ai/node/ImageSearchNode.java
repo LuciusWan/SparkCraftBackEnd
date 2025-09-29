@@ -7,11 +7,16 @@ import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.lucius.sparkcraftbackend.ai.WorkflowContext;
+import com.lucius.sparkcraftbackend.dto.WorkflowProgressEvent;
 import com.lucius.sparkcraftbackend.entity.ImageResource;
+import com.lucius.sparkcraftbackend.properties.AiServiceProperties;
+import com.lucius.sparkcraftbackend.service.WorkflowProgressService;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.action.AsyncNodeAction;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
 import java.io.StringReader;
@@ -24,13 +29,33 @@ import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 
 @Slf4j
 @Data
+@Component
+@ConfigurationProperties(prefix = "spark.ai.coze")
 public class ImageSearchNode {
     
     // Coze API 配置常量
     private static final String COZE_API_URL = "https://api.coze.cn/v1/workflow/stream_run";
+    private static String COZE_API_TOKEN;
     private static final String COZE_WORKFLOW_ID = "7554768700659515435";
-    private static final String COZE_API_TOKEN = "pat_qO5aatmZIU3AYMPoXaAia8OwmLitwUowuLeZmqSbG1FilUqXLQBM5ZVjQFYMqLNr";
     private static final int COZE_TIMEOUT = 30000;
+    
+    // 静态配置属性，通过配置类注入
+    private static AiServiceProperties aiServiceProperties;
+    private static WorkflowProgressService workflowProgressService;
+    public void setApiKey(String apiKey) {
+        ImageSearchNode.COZE_API_TOKEN = apiKey;
+    }
+    /**
+     * 设置AI服务配置属性
+     * @param properties AI服务配置属性
+     */
+    public static void setAiServiceProperties(AiServiceProperties properties) {
+        aiServiceProperties = properties;
+    }
+
+    public static void setWorkflowProgressService(WorkflowProgressService service) {
+        workflowProgressService = service;
+    }
     
     public static AsyncNodeAction<MessagesState<String>> create() {
         return node_async(state -> {
@@ -40,6 +65,13 @@ public class ImageSearchNode {
                 // 从 WorkflowContext 中获取关键词
                 WorkflowContext context = WorkflowContext.getContext(state);
                 String keyPoint = context.getKeyPoint();
+                
+                // 发送节点开始事件
+                if (workflowProgressService != null && context.getJobId() != null) {
+                    WorkflowProgressEvent startEvent = WorkflowProgressEvent.nodeStarted(
+                        context.getJobId(), context.getAppId(), "image_collector", "图片素材收集", 2, 5);
+                    workflowProgressService.sendProgressEvent(startEvent);
+                }
                 
                 if (StrUtil.isBlank(keyPoint)) {
                     log.warn("关键词为空，跳过图片搜索");
@@ -61,6 +93,17 @@ public class ImageSearchNode {
                 context.setImageList(searchResults);
                 
                 log.info("Coze 图片搜索完成，共获取 {} 张图片", searchResults.size());
+                
+                // 发送节点完成事件
+                if (workflowProgressService != null && context.getJobId() != null) {
+                    Map<String, Object> nodeResult = new HashMap<>();
+                    nodeResult.put("imageCount", searchResults.size());
+                    nodeResult.put("images", searchResults);
+                    
+                    WorkflowProgressEvent completedEvent = WorkflowProgressEvent.nodeCompleted(
+                        context.getJobId(), context.getAppId(), "image_collector", "图片素材收集", nodeResult, 2, 5);
+                    workflowProgressService.sendProgressEvent(completedEvent);
+                }
                 
                 // 返回结果
                 Map<String, Object> result = new HashMap<>();
@@ -90,8 +133,14 @@ public class ImageSearchNode {
         List<ImageResource> images = new ArrayList<>();
         
         try {
+            String apiToken = COZE_API_TOKEN;
+            if (StrUtil.isBlank(apiToken)) {
+                log.error("❌ Coze API Token 未配置");
+                return images;
+            }
+            
             log.info("调用 Coze API，工作流ID: {}, 关键词: {}", COZE_WORKFLOW_ID, keyPoint);
-            log.debug("使用 Token: {}...{}", COZE_API_TOKEN.substring(0, 10), COZE_API_TOKEN.substring(COZE_API_TOKEN.length() - 10));
+            log.debug("使用 Token: {}...{}", apiToken.substring(0, 10), apiToken.substring(apiToken.length() - 10));
             
             // 构建请求体
             JSONObject requestBody = new JSONObject();
@@ -105,7 +154,7 @@ public class ImageSearchNode {
             
             // 发送 POST 请求
             HttpResponse response = HttpRequest.post(COZE_API_URL)
-                    .header("Authorization", "Bearer " + COZE_API_TOKEN)
+                    .header("Authorization", "Bearer " + apiToken)
                     .header("Content-Type", "application/json")
                     .body(requestBody.toString())
                     .timeout(COZE_TIMEOUT)
