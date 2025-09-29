@@ -100,8 +100,13 @@
 
         <dependency>
             <groupId>com.tencentcloudapi</groupId>
-            <artifactId>tencentcloud-sdk-java-wsa</artifactId>
-            <version>3.1.1337</version>
+            <artifactId>tencentcloud-sdk-java-common</artifactId>
+            <version>LATEST</version>
+        </dependency>
+        <dependency>
+            <groupId>com.tencentcloudapi</groupId>
+            <artifactId>tencentcloud-sdk-java-ai3d</artifactId>
+            <version>LATEST</version>
         </dependency>
         <!-- Spring Session + Redis -->
         <dependency>
@@ -119,6 +124,12 @@
             <groupId>com.aliyun.oss</groupId>
             <artifactId>aliyun-sdk-oss</artifactId>
             <version>3.17.4</version>
+        </dependency>
+        <!-- FastJSON -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+            <version>2.0.52</version>
         </dependency>
 
     </dependencies>

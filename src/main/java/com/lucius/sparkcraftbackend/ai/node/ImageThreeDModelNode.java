@@ -10,8 +10,12 @@ import com.lucius.sparkcraftbackend.entity.ThreeDResult;
 import com.lucius.sparkcraftbackend.service.ImageProjectService;
 import com.lucius.sparkcraftbackend.service.ThreeDResultService;
 import com.lucius.sparkcraftbackend.service.WorkflowProgressService;
+
 import com.tencentcloudapi.ai3d.v20250513.Ai3dClient;
-import com.tencentcloudapi.ai3d.v20250513.models.*;
+import com.tencentcloudapi.ai3d.v20250513.models.QueryHunyuanTo3DJobRequest;
+import com.tencentcloudapi.ai3d.v20250513.models.QueryHunyuanTo3DJobResponse;
+import com.tencentcloudapi.ai3d.v20250513.models.SubmitHunyuanTo3DJobRequest;
+import com.tencentcloudapi.ai3d.v20250513.models.SubmitHunyuanTo3DJobResponse;
 import com.tencentcloudapi.common.AbstractModel;
 import com.tencentcloudapi.common.exception.TencentCloudSDKException;
 import lombok.extern.slf4j.Slf4j;

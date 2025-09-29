@@ -83,3 +83,36 @@ create index idx_conversation_id
 
 create index idx_created_at
     on chat_memory (created_at);
+create table threedresult
+(
+    id         bigint auto_increment comment 'id'
+        primary key,
+    jobId      bigint                             null comment '结果ID',
+    createTime datetime default CURRENT_TIMESTAMP not null comment '创建时间',
+    updateTime datetime default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    isDelete   tinyint  default 0                 not null comment '是否删除',
+    userId     bigint                             null comment '关联的用户ID',
+    isUsed     tinyint  default 0                 not null comment '是否提取成功'
+);
+
+-- 工作流任务表
+create table if not exists workflow_job
+(
+    id               bigint auto_increment comment 'id' primary key,
+    job_id           varchar(64)                         not null comment '任务ID',
+    user_id          bigint                              not null comment '用户ID',
+    image_project_id bigint                              not null comment '项目ID',
+    original_prompt  text                                not null comment '原始提示词',
+    status           varchar(32) default 'CREATED'      not null comment '任务状态',
+    message          varchar(512)                        null comment '状态消息',
+    progress         int         default 0               not null comment '进度百分比',
+    result_json      text                                null comment '结果JSON',
+    error_message    text                                null comment '错误消息',
+    create_time      datetime    default CURRENT_TIMESTAMP not null comment '创建时间',
+    update_time      datetime    default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    UNIQUE KEY uk_job_id (job_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_image_project_id (image_project_id),
+    INDEX idx_status (status),
+    INDEX idx_create_time (create_time)
+) comment '工作流任务' collate = utf8mb4_unicode_ci;

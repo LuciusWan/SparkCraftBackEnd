@@ -21,6 +21,11 @@ public class WorkflowExecuteVO implements Serializable {
     private String executionId;
 
     /**
+     * 任务ID（用于数据库跟踪）
+     */
+    private String jobId;
+
+    /**
      * 项目ID
      */
     private Long imageProjectId;
@@ -49,6 +54,16 @@ public class WorkflowExecuteVO implements Serializable {
      * 收集到的图片素材列表
      */
     private List<ImageResource> imageList;
+
+    /**
+     * AI 生成的图片
+     */
+    private ImageResource aiImage;
+
+    /**
+     * 生产工艺流程
+     */
+    private String productionProcess;
 
     /**
      * 各个节点的执行结果

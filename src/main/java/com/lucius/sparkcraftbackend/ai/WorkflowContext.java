@@ -53,6 +53,8 @@ public class WorkflowContext {
     private ImageResource aiImage;
 
     private String productionProcess;
+
+    private String jobId;
     /**
      * 当前执行步骤
      */
